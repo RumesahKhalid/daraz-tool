@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
-import anthropic
+import google.generativeai as genai
 import openpyxl
 from openpyxl import load_workbook
 import base64
@@ -11,7 +11,7 @@ import os
 app = Flask(__name__)
 CORS(app, origins="*", allow_headers=["Content-Type"], methods=["GET", "POST", "OPTIONS"])
 
-client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
 
 @app.route('/')
 def home():
@@ -23,10 +23,16 @@ def analyze():
         data = request.json
         image_base64 = data.get('image')
         
-        message = client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=1000,
-            system="""You are a Daraz Pakistan product listing expert. Analyze the product image and return ONLY valid JSON with these exact fields:
+        image_data = base64.b64decode(image_base64)
+        
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        
+        response = model.generate_content([
+            {
+                "mime_type": "image/jpeg",
+                "data": image_data
+            },
+            """You are a Daraz Pakistan product listing expert. Analyze this product image and return ONLY valid JSON with these exact fields:
 {
   "productName": "20-40 char SEO name with brand/type/feature",
   "brand": "brand name or Generic if not visible",
@@ -35,27 +41,10 @@ def analyze():
   "highlights": "3-5 bullet points separated by newlines starting with bullet about key features",
   "description": "2-3 paragraph HTML description for Pakistani buyers"
 }
-Respond with ONLY the JSON object. No markdown, no explanation.""",
-            messages=[{
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": "image/jpeg",
-                            "data": image_base64
-                        }
-                    },
-                    {
-                        "type": "text",
-                        "text": "Analyze this product image and return the JSON listing details."
-                    }
-                ]
-            }]
-        )
+Respond with ONLY the JSON object. No markdown, no explanation."""
+        ])
         
-        text = message.content[0].text.replace('```json', '').replace('```', '').strip()
+        text = response.text.replace('```json', '').replace('```', '').strip()
         result = json.loads(text)
         return jsonify({"success": True, "data": result})
         
@@ -108,10 +97,10 @@ def generate_excel():
         for i, product in enumerate(products):
             row_num = start_row + i
             
-            def set_col(header, value):
+            def set_col(header, value, rn=row_num):
                 col = col_map.get(header)
                 if col:
-                    ws.cell(row=row_num, column=col, value=value)
+                    ws.cell(row=rn, column=col, value=value)
 
             set_col('*Product Name(English)', product.get('productName', ''))
             set_col('*Brand', product.get('brand', 'Generic'))
