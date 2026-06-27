@@ -25,7 +25,7 @@ def analyze():
         
         image_data = base64.b64decode(image_base64)
         
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        model = genai.GenerativeModel('gemini-2.0-flash')
         
         response = model.generate_content([
             {
